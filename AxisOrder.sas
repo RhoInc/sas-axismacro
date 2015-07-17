@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------------*
 
    *******************************************************
-   ***  Copyright Rho, Inc. 2014, all rights reserved  ***
+   ***  Copyright Rho, Inc. 2015, all rights reserved  ***
    *******************************************************
 
    MACRO:      AxisOrder.sas
@@ -20,6 +20,9 @@
                                        Once the algorithm gets within MajDev of MajTarg, white space reduction
                                           drives the axis selection process.
                                        Default value is 1.
+               Threshold=> OPTIONAL.   Thresholdmin/max value to use in deriving _&Prefix.AxisListUnb.
+                                       Set to 0.7 to most closely approximate SGPLOT behavior.
+                                       Default values is 0.
                RoundBys => OPTIONAL.   Roundness of by value candidates.
                                        Y=yes limits the tick interval search to 10, 20, 25, or 50. 
                                        N=no expands the tick interval search to 10, 12.5, 15, 20, 25, 30, 40, 
@@ -30,28 +33,31 @@
                                        Default value is M.
 
    OUTPUTS:    Macro variables
-                  _&Prefix.AxisStart   Axis minimum/start value.
-                  _&Prefix.AxisEnd     Axis maximum/end value.
+                  _&Prefix.AxisStart   Axis start value.
+                  _&Prefix.AxisEnd     Axis end value.
                   _&Prefix.AxisBy      Axis increment/by value.
                   _&Prefix.AxisList    Space-separated list of major tick mark values.
-                  _&Prefix.AxisMinor   Recommeneded number of minor tick marks.
+                  _&Prefix.AxisMin     Minimum observed value in VAR or VAL.
+                  _&Prefix.AxisMax     Maximum observed value in VAR or VAL.
+                  _&Prefix.AxisListUnb Alternate version of AxisList that allows for unbounded data
+                                       values by removing the first/last values if they are smaller/
+                                       larger than the observed minimum/maximum.
+                  _&Prefix.AxisMinor   Recommended number of minor tick marks.
                                        Returns zero when By is specified.
 
-   EXAMPLE 1:  %AxisOrder
-                  (Data=work.adlb
-                  ,Var=aval anrlo anrhi
-                  ,Prefix=y
-                  ,MajTarg=3
-                  );
+   EXAMPLE 1:  %AxisOrder(Data=work.adlb
+                         ,Var=aval anrlo anrhi
+                         ,Prefix=y
+                         ,MajTarg=3
+                         );
 
                axis1 order=(&_yAxisStart to &_yAxisEnd by &_yAxisBy) minor=(n=&_yAxisMinor);
                
-   EXAMPLE 2:  %AxisOrder
-                  (Data=lb_alt
-                  ,Var=lbstresn
-                  ,Val=0
-                  ,By=10
-                  );
+   EXAMPLE 2:  %AxisOrder(Data=lb_alt
+                         ,Var=lbstresn
+                         ,Val=0
+                         ,By=10
+                         );
 
                axis1 order=(&_AxisStart to &_AxisEnd by &_AxisBy);
                                
@@ -60,10 +66,23 @@
    DATE        PROGRAMMER        DESCRIPTION
    ---------   ---------------   ----------------------------------------------------
    20140313    Shane Rosanbalm   Original program.
+   20150616    Shane Rosanbalm   Add _AxisMin, _AxisMax, and _AxisListUnb.
+   20150713    Shane Rosanbalm   Add Threshold.
 
 *-----------------------------------------------------------------------------------*/
 
-%MACRO AxisOrder(Data=, Var=, Val=, By=, Prefix=, MajTarg=6, MajDev=1, RoundBys=Y, MinDens=M);
+%MACRO AxisOrder
+         (Data=
+         ,Var=
+         ,Val=
+         ,By=
+         ,Prefix=
+         ,MajTarg=6
+         ,MajDev=1
+         ,Threshold=0
+         ,RoundBys=Y
+         ,MinDens=M
+         );
 
 
    %*------------------------------------------------------------------------------;
@@ -72,7 +91,8 @@
 
 
    %*---------- output macro variables to be created ----------;
-   %GLOBAL _&Prefix.AxisStart _&Prefix.AxisEnd _&Prefix.AxisBy _&Prefix.AxisList _&Prefix.AxisMinor;
+   %GLOBAL _&Prefix.AxisStart _&Prefix.AxisEnd _&Prefix.AxisBy _&Prefix.AxisList _&Prefix.AxisMinor
+           _&Prefix.AxisMin _&Prefix.AxisMax _&Prefix.AxisListUnb;
       
       
    %*---------- capture option settings at macro invocation ----------;
@@ -365,7 +385,7 @@
          
       %end;
       
-      %*---------- establish min and max ----------;
+      %*---------- establish start and end ----------;
       AxisStart = round(AxisBy*floor(varmin/AxisBy),&_precision);
       AxisEnd = round(AxisBy*ceil(varmax/AxisBy),&_precision);
       
@@ -373,6 +393,28 @@
       length AxisList $200;
       do value = AxisStart to AxisEnd by AxisBy;
          AxisList = catx(' ',AxisList,put(value,best.));
+      end;
+      
+      %*---------- establish min and max ----------;
+      AxisMin = round(varmin,&_precision);
+      AxisMax = round(varmax,&_precision);
+      
+      %*---------- trim first/last value from list if inside threshold ----------;
+      unbstart = AxisStart;
+      secondTick = round(AxisStart+AxisBy,&_precision);
+      unbstartcut = secondTick - (1-&Threshold)*AxisBy;
+      if unbstartcut < AxisMin then unbstart = round(AxisStart+AxisBy,&_precision);
+      else AxisMin = unbstart;
+      
+      unbend = AxisEnd;
+      penultTick = round(AxisEnd-AxisBy,&_precision);
+      unbendcut = penultTick + (1-&Threshold)*AxisBy;
+      if AxisMax < unbendcut then unbend = round(AxisEnd-AxisBy,&_precision);
+      else AxisMax = unbend;
+      
+      length AxisListUnb $200;
+      do value = unbstart to unbend by AxisBy;
+         AxisListUnb = catx(' ',AxisListUnb,put(value,best.));
       end;
       
       %*---------- choose minor value ----------;
@@ -392,11 +434,14 @@
       %end;
       
       %*---------- send results to macro variables ----------;
-      call symputx("_&Prefix.AxisStart",put(AxisStart,best.));
-      call symputx("_&Prefix.AxisEnd"  ,put(AxisEnd,best.));
-      call symputx("_&Prefix.AxisBy"   ,put(AxisBy,best.));
-      call symputx("_&Prefix.AxisList" ,AxisList);
-      call symputx("_&Prefix.AxisMinor",put(AxisMinor,best.));
+      call symputx("_&Prefix.AxisStart"  ,put(AxisStart,best.));
+      call symputx("_&Prefix.AxisEnd"    ,put(AxisEnd,best.));
+      call symputx("_&Prefix.AxisBy"     ,put(AxisBy,best.));
+      call symputx("_&Prefix.AxisList"   ,AxisList);
+      call symputx("_&Prefix.AxisMin"    ,put(AxisMin,best.));
+      call symputx("_&Prefix.AxisMax"    ,put(AxisMax,best.));
+      call symputx("_&Prefix.AxisListUnb",AxisListUnb);
+      call symputx("_&Prefix.AxisMinor"  ,put(AxisMinor,best.));
       
    run;
    
@@ -416,11 +461,14 @@
 
 
    %*---------- inform user of macro variable values ----------;
-   %put _&Prefix.AxisStart = [ &&_&Prefix.AxisStart ];
-   %put _&Prefix.AxisEnd   = [ &&_&Prefix.AxisEnd ];
-   %put _&Prefix.AxisBy    = [ &&_&Prefix.AxisBy ];
-   %put _&Prefix.AxisList  = [ &&_&Prefix.AxisList ];
-   %put _&Prefix.AxisMinor = [ &&_&Prefix.AxisMinor ];
+   %put _&Prefix.AxisStart   = [ &&_&Prefix.AxisStart ];
+   %put _&Prefix.AxisEnd     = [ &&_&Prefix.AxisEnd ];
+   %put _&Prefix.AxisBy      = [ &&_&Prefix.AxisBy ];
+   %put _&Prefix.AxisList    = [ &&_&Prefix.AxisList ];
+   %put _&Prefix.AxisMin     = [ &&_&Prefix.AxisMin ];
+   %put _&Prefix.AxisMax     = [ &&_&Prefix.AxisMax ];
+   %put _&Prefix.AxisListUnb = [ &&_&Prefix.AxisListUnb ];
+   %put _&Prefix.AxisMinor   = [ &&_&Prefix.AxisMinor ];
    
    
 %MEND AxisOrder;
