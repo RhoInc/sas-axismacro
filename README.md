@@ -1,7 +1,18 @@
 # sas-axismacro
-A SAS macro for setting optional axis ranges. 
+
+This repository contains a SAS<sup>&reg;</sup> macro for automating the selection of axis ranges for continuous variables. 
 
 ![sas-axismacro variety](https://github.com/RhoInc/sas-axismacro/blob/master/img/axismacro.png)
+
+For more details you have two options.
+- The [Wiki](https://github.com/RhoInc/sas-axismacro/wiki/).
+- The [SESUG paper](https://github.com/RhoInc/sas-axismacro/blob/master/paper/RIV-12.pdf).
+
+.
+.
+.
+.
+.
 
 For more details on this macro, please visit http://graphics.rhoworld.com/tools/axismacro/.
 
