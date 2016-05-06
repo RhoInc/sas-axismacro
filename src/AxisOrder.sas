@@ -64,10 +64,12 @@
    PROGRAM HISTORY:
 
    DATE        PROGRAMMER        DESCRIPTION
-   ---------   ---------------   ----------------------------------------------------
-   20140313    Shane Rosanbalm   Original program.
-   20150616    Shane Rosanbalm   Add _AxisMin, _AxisMax, and _AxisListUnb.
-   20150713    Shane Rosanbalm   Add Threshold.
+   ----------  ---------------   ----------------------------------------------------
+   2014-03-13  Shane Rosanbalm   Original program.
+   2015-06-16  Shane Rosanbalm   Add _AxisMin, _AxisMax, and _AxisListUnb.
+   2015-07-13  Shane Rosanbalm   Add Threshold.
+   2016-05-06  Shane Rosanbalm   Fails when &val contains negative numbers.
+                                 Added %nrbquote to %if and %str( ) as modifier to countw.
 
 *-----------------------------------------------------------------------------------*/
 
@@ -156,7 +158,7 @@
    %end;
    %if %nrbquote(&Val) ne %then %do;
       %let _badval = 0;
-      %do _vali = 1 %to %sysfunc(countw(&Val));;
+      %do _vali = 1 %to %sysfunc(countw(&Val,%str( )));;
          %let _valvalue = %scan(&Val,&_vali,%str( ));
          data _null_;
             check = input("&_valvalue",??best.);
@@ -254,15 +256,15 @@
    %*---------- stack Val and Var information into vertical structure ----------;
    data _vert&Data;
       set &Data (keep=&Var) end=eof;
-      %if &Var ne %then %do;
+      %if &Var ne %str() %then %do;
          %do _vari = 1 %to %sysfunc(countw(&Var));
             vert = %scan(&Var,&_vari,%str( ));
             output;
          %end;
       %end;
       if eof then do;
-         %if &Val ne %then %do;
-            %do _vali = 1 %to %sysfunc(countw(&Val));
+         %if %nrbquote(&Val) ne %str() %then %do;
+            %do _vali = 1 %to %sysfunc(countw(&Val,%str( )));
                vert = %scan(&Val,&_vali,%str( ));
                output;
             %end;
