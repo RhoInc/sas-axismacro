@@ -70,6 +70,7 @@
    2015-07-13  Shane Rosanbalm   Add Threshold.
    2016-05-06  Shane Rosanbalm   Fails when &val contains negative numbers.
                                  Added %nrbquote to %if and %str( ) as modifier to countw.
+   2016-07-25  Shane Rosanbalm   Fix two-level dataset name bug.
 
 *-----------------------------------------------------------------------------------*/
 
@@ -131,6 +132,9 @@
       %put THE MACRO WILL STOP EXECUTING.;
       %goto badending;
    %end;
+   
+   %*---------- is Data two-level ----------;
+   %let libmem = %sysfunc(compress(&Data,.));
    
    
    %*---------- do Var items exist ----------;
@@ -254,7 +258,7 @@
    
    
    %*---------- stack Val and Var information into vertical structure ----------;
-   data _vert&Data;
+   data _vert&libmem;
       set &Data (keep=&Var) end=eof;
       %if &Var ne %str() %then %do;
          %do _vari = 1 %to %sysfunc(countw(&Var));
@@ -274,7 +278,7 @@
       
       
    %*---------- calculate min, max, range based on variables and values of interest ----------;
-   proc means data=_vert&Data noprint;
+   proc means data=_vert&libmem noprint;
       var vert;
       output out=_minmaxrange min=varmin max=varmax range=varrange;
    run;
@@ -450,7 +454,7 @@
    
    %*---------- remove temporary datasets ----------;
    proc sql noprint;
-      drop table _vert&Data, _minmaxrange, _axisorder;
+      drop table _vert&libmem, _minmaxrange, _axisorder;
    quit;
 
    
